@@ -47,6 +47,9 @@ jobs:
         with:
           terraform_version: "1.9"
 
+      - name: Rewrite example source to local path
+        run: sed -i 's|source.*=.*"dash0hq/dash0-integration/aws"|source = "../../"|' examples/${{ matrix.example }}/main.tf
+
       - name: Terraform Init
         run: terraform init -backend=false
         working-directory: examples/${{ matrix.example }}
