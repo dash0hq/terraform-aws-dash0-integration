@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: Copyright 2026 Dash0 Inc.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    # Only run when the merge commit is not a release commit itself
+    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version
+        id: bump
+        run: |
+          current="${{ steps.latest_tag.outputs.tag }}"
+          current="${current#v}"
+          IFS='.' read -r major minor patch <<< "$current"
+
+          # Check commit messages since last tag for version bump hints
+          if git log "${{ steps.latest_tag.outputs.tag }}..HEAD" --pretty=%B 2>/dev/null | grep -qiE '^BREAKING CHANGE:|!:'; then
+            major=$((major + 1)); minor=0; patch=0
+          elif git log "${{ steps.latest_tag.outputs.tag }}..HEAD" --pretty=%B 2>/dev/null | grep -qiE '^feat'; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          echo "version=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.version }}" \
+            --title "${{ steps.bump.outputs.version }}" \
+            --generate-notes
